@@ -735,10 +735,51 @@
             box-shadow: 8px 8px 0px #000, 0 0 15px rgba(0, 240, 255, 0.25);
         }
 
+        .shop-card-wrapper.not-owned {
+            border-color: #ffd54f;
+            box-shadow: 6px 6px 0px #000, 0 0 16px rgba(255, 213, 79, 0.4);
+        }
+
+        .shop-card-wrapper.already-owned {
+            border-color: #37474f;
+        }
+
         .shop-card-wrapper.bought {
-            opacity: 0.6;
+            opacity: 0.55;
             filter: grayscale(40%);
             border-color: #4caf50;
+            box-shadow: 6px 6px 0px #000;
+        }
+
+        .shop-card-badge {
+            position: absolute;
+            top: 6px;
+            left: 6px;
+            font-family: 'Bangers', cursive;
+            font-size: 0.85rem;
+            padding: 3px 8px;
+            border-radius: 4px;
+            border: 2px solid #000;
+            z-index: 10;
+            letter-spacing: 1px;
+            box-shadow: 2px 2px 0 #000;
+        }
+
+        .shop-card-badge.badge-new {
+            background: #ffd54f;
+            color: #000;
+            animation: pulseNewBadge 1.2s ease-in-out infinite alternate;
+        }
+
+        .shop-card-badge.badge-owned {
+            background: #1c2838;
+            color: #90caf9;
+            border-color: #455a64;
+        }
+
+        @keyframes pulseNewBadge {
+            0% { transform: scale(1); box-shadow: 2px 2px 0 #000; }
+            100% { transform: scale(1.06); box-shadow: 2px 2px 0 #000, 0 0 10px #ffd54f; }
         }
 
         .shop-price-tag {
@@ -753,10 +794,27 @@
         }
 
         .shop-status-badge {
-            font-size: 0.8rem;
-            color: #aaa;
+            font-size: 0.78rem;
             margin-bottom: 8px;
             font-family: 'Share Tech Mono', monospace;
+            padding: 3px 6px;
+            border-radius: 4px;
+            text-align: center;
+            width: 100%;
+            box-sizing: border-box;
+        }
+
+        .shop-status-badge.not-owned {
+            color: #ffd54f;
+            background: rgba(255, 213, 79, 0.15);
+            border: 1px solid #ffd54f;
+            font-weight: bold;
+        }
+
+        .shop-status-badge.already-owned {
+            color: #b0bec5;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid #37474f;
         }
 
         .shop-buy-btn {
@@ -1389,13 +1447,21 @@
                 item.price = SHOP_PRICES[cardObj.rarity] || item.price;
 
                 const ownedCount = userCollection[item.name] || 0;
+                const isOwned = ownedCount > 0;
                 const canAfford = currentFragments >= item.price;
 
                 const cardWrapper = document.createElement("div");
-                cardWrapper.className = `shop-card-wrapper ${item.bought ? 'bought' : ''}`;
+                cardWrapper.className = `shop-card-wrapper ${item.bought ? 'bought' : (isOwned ? 'already-owned' : 'not-owned')}`;
 
                 // Mini carte affichée
                 const miniCard = createCardHTML(cardObj, false, true, ownedCount, true, false);
+
+                // Badge visible directement SUR la carte pour distinguer immédiatement
+                const badgeOnCard = document.createElement("div");
+                badgeOnCard.className = `shop-card-badge ${isOwned ? 'badge-owned' : 'badge-new'}`;
+                badgeOnCard.innerText = isOwned ? `DÉJÀ x${ownedCount}` : `★ NON POSSÉDÉ`;
+                miniCard.appendChild(badgeOnCard);
+
                 cardWrapper.appendChild(miniCard);
 
                 // Prix
@@ -1404,14 +1470,13 @@
                 priceTag.innerHTML = `<span>${item.price}</span> <span>💠</span>`;
                 cardWrapper.appendChild(priceTag);
 
-                // Statut de possession
+                // Statut de possession clair sous la carte
                 const statusBadge = document.createElement("div");
-                statusBadge.className = "shop-status-badge";
-                statusBadge.innerText = ownedCount > 0 ? `Possédé : x${ownedCount}` : `Non possédé (Nouveau !)`;
-                if (ownedCount === 0) statusBadge.style.color = "#ffd54f";
+                statusBadge.className = `shop-status-badge ${isOwned ? 'already-owned' : 'not-owned'}`;
+                statusBadge.innerText = isOwned ? `⚠️ DÉJÀ EN COLLECTION (x${ownedCount})` : `⭐ NON POSSÉDÉ (NOUVEAU !)`;
                 cardWrapper.appendChild(statusBadge);
 
-                // Bouton d'achat
+                // Bouton d'achat avec libellé explicite
                 const buyBtn = document.createElement("button");
                 buyBtn.className = "shop-buy-btn";
                 if (item.bought) {
@@ -1424,7 +1489,13 @@
                     buyBtn.style.color = "#aaa";
                 } else {
                     buyBtn.disabled = false;
-                    buyBtn.innerText = `ACHETER (${item.price} 💠)`;
+                    if (!isOwned) {
+                        buyBtn.innerText = `ACHETER (${item.price} 💠)`;
+                        buyBtn.style.background = "#ffd54f";
+                    } else {
+                        buyBtn.innerText = `DOUBLON (${item.price} 💠)`;
+                        buyBtn.style.background = "#ffb74d";
+                    }
                     buyBtn.onclick = () => buyShopCard(index);
                 }
                 cardWrapper.appendChild(buyBtn);
