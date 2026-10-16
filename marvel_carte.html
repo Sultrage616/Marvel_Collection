@@ -905,6 +905,11 @@
             </button>
         </div>
         <div id="collection-container"></div>
+        <div style="margin: 30px 0 20px 0; text-align: center;">
+            <button id="stats-open-btn" class="action-btn" style="background: #0288d1; font-size: 1.35rem; padding: 10px 30px; box-shadow: 6px 6px 0px #000;" onclick="openStatsModal()">
+                📊 STATISTIQUES
+            </button>
+        </div>
     </main>
 
     <main id="shop-view" class="view-section">
@@ -1012,6 +1017,23 @@
                 </button>
             </div>
             <a id="modal-link" class="modal-link" href="#" target="_blank">Rechercher dans les archives web S.H.I.E.L.D.</a>
+        </div>
+    </div>
+
+    <!-- Modal Statistiques S.H.I.E.L.D. -->
+    <div id="stats-modal" class="modal-overlay" onclick="closeStatsModal(event)">
+        <div class="modal-content" onclick="event.stopPropagation()" style="max-width: 480px; text-align: center;">
+            <span class="close-btn" onclick="closeStatsModal()">&times;</span>
+            <h2 style="color: #0a0e17; font-size: 2.3rem; margin-top: 5px; margin-bottom: 5px;">📊 STATISTIQUES S.H.I.E.L.D.</h2>
+            <div style="font-size: 0.85rem; color: #555; margin-bottom: 15px; font-weight: bold; letter-spacing: 1px;">HISTORIQUE ET ANALYSE DES TIRAGES</div>
+
+            <div id="stats-grid-container">
+                <!-- Rempli dynamiquement -->
+            </div>
+
+            <button class="action-btn" style="width: 100%; font-size: 1.2rem; padding: 8px; margin-top: 15px; margin-bottom: 0; background: #2b3a55;" onclick="closeStatsModal()">
+                FERMER
+            </button>
         </div>
     </div>
 
@@ -1371,6 +1393,47 @@
             }
         }
 
+        // --- STATISTIQUES DE JEU (PACKS & TIRAGES PAR RARETÉ) ---
+        function getGameStats() {
+            let stats = null;
+            try {
+                stats = JSON.parse(localStorage.getItem('marvelGameStats'));
+            } catch (e) {}
+
+            if (!stats || typeof stats !== 'object' || stats.packsOpened === undefined) {
+                let baseCommons = 0;
+                let baseAR = 0;
+                let baseEpics = 0;
+                let baseLegendaries = 0;
+
+                for (const [name, count] of Object.entries(userCollection)) {
+                    const card = getCardByName(name);
+                    if (!card) continue;
+                    if (card.rarity === 'Commune') baseCommons += count;
+                    else if (card.rarity === 'Assez-Rare') baseAR += count;
+                    else if (card.rarity === 'Epique') baseEpics += count;
+                    else if (card.rarity === 'Légendaire') baseLegendaries += count;
+                }
+
+                const totalCards = baseCommons + baseAR + baseEpics + baseLegendaries;
+                const estPacks = Math.ceil(totalCards / 4);
+
+                stats = {
+                    packsOpened: estPacks,
+                    pulledCommons: baseCommons,
+                    pulledAR: baseAR,
+                    pulledEpics: baseEpics,
+                    pulledLegendaries: baseLegendaries
+                };
+                localStorage.setItem('marvelGameStats', JSON.stringify(stats));
+            }
+            return stats;
+        }
+
+        function saveGameStats(stats) {
+            localStorage.setItem('marvelGameStats', JSON.stringify(stats));
+        }
+
         // --- SYSTÈME DE FRAGMENTS S.H.I.E.L.D. & VALEURS ---
         const DUPE_VALUES = {
             "Commune": 10,
@@ -1611,6 +1674,15 @@
             localStorage.setItem('marvelShopCards', JSON.stringify(cards));
 
             userCollection[item.name] = (userCollection[item.name] || 0) + 1;
+            const cardObj = getCardByName(item.name);
+            if (cardObj) {
+                const stats = getGameStats();
+                if (cardObj.rarity === 'Commune') stats.pulledCommons++;
+                else if (cardObj.rarity === 'Assez-Rare') stats.pulledAR++;
+                else if (cardObj.rarity === 'Epique') stats.pulledEpics++;
+                else if (cardObj.rarity === 'Légendaire') stats.pulledLegendaries++;
+                saveGameStats(stats);
+            }
             saveCollection();
 
             renderShop();
@@ -1773,6 +1845,9 @@
             // Met à jour immédiatement le décompte (ex: 2/2 -> 1/2) et lance le chrono
             updatePackUI();
 
+            const stats = getGameStats();
+            stats.packsOpened++;
+
             let cardsDrawn = [];
             let pickedNames = new Set();
             
@@ -1783,10 +1858,16 @@
                 }
                 pickedNames.add(card.name);
 
+                if (card.rarity === 'Commune') stats.pulledCommons++;
+                else if (card.rarity === 'Assez-Rare') stats.pulledAR++;
+                else if (card.rarity === 'Epique') stats.pulledEpics++;
+                else if (card.rarity === 'Légendaire') stats.pulledLegendaries++;
+
                 const isNew = (userCollection[card.name] || 0) === 0; 
                 cardsDrawn.push({ cardData: card, isNew: isNew });
                 userCollection[card.name] = (userCollection[card.name] || 0) + 1;
             }
+            saveGameStats(stats);
             saveCollection();
 
             cardsDrawn.forEach((item, index) => {
@@ -1962,19 +2043,22 @@
 
             // Tableau des catégories pour gérer l'affichage séparé
             const categories = [
-                { title: `Légendaires (${legendaries.length})`, data: legendaries, color: "#ffd54f", borderColor: "#e65100" },
-                { title: `Épiques (${epics.length})`, data: epics, color: "#b000ff", borderColor: "#4a0072" },
-                { title: `Assez Rares (${uncommons.length})`, data: uncommons, color: "#00b0ff", borderColor: "#00509d" },
-                { title: `Communes (${commons.length})`, data: commons, color: "#9e9e9e", borderColor: "#424242" }
+                { name: "Légendaires", data: legendaries, color: "#ffd54f", borderColor: "#e65100" },
+                { name: "Épiques", data: epics, color: "#b000ff", borderColor: "#4a0072" },
+                { name: "Assez Rares", data: uncommons, color: "#00b0ff", borderColor: "#00509d" },
+                { name: "Communes", data: commons, color: "#9e9e9e", borderColor: "#424242" }
             ];
 
             categories.forEach(cat => {
-                // Création du Titre de la rareté
+                const ownedInCat = cat.data.filter(c => (userCollection[c.name] || 0) > 0).length;
+                const totalInCat = cat.data.length;
+
+                // Création du Titre de la rareté avec format (X/Total)
                 const titleEl = document.createElement("h2");
                 titleEl.className = "rarity-title";
                 titleEl.style.color = cat.color;
                 titleEl.style.borderColor = cat.borderColor;
-                titleEl.innerText = cat.title;
+                titleEl.innerText = `${cat.name} (${ownedInCat}/${totalInCat})`;
                 container.appendChild(titleEl);
 
                 // Création de la grille pour cette rareté
@@ -2012,9 +2096,15 @@
         }
 
         function adminGiveAllCards() {
+            const stats = getGameStats();
             allCards.forEach(c => {
                 userCollection[c.name] = (userCollection[c.name] || 0) + 1;
+                if (c.rarity === 'Commune') stats.pulledCommons++;
+                else if (c.rarity === 'Assez-Rare') stats.pulledAR++;
+                else if (c.rarity === 'Epique') stats.pulledEpics++;
+                else if (c.rarity === 'Légendaire') stats.pulledLegendaries++;
             });
+            saveGameStats(stats);
             saveCollection();
             showAdminFeedback(`✅ Les ${allCards.length} cartes ont été ajoutées à votre collection !`, "#00e676");
         }
@@ -2023,6 +2113,14 @@
             if (confirm(`Confirmer la suppression de TOUTES les cartes de la collection ? (Retour à 0/${allCards.length})`)) {
                 userCollection = {};
                 saveCollection();
+                const resetStats = {
+                    packsOpened: 0,
+                    pulledCommons: 0,
+                    pulledAR: 0,
+                    pulledEpics: 0,
+                    pulledLegendaries: 0
+                };
+                saveGameStats(resetStats);
                 showAdminFeedback(`🗑️ Toutes les cartes ont été retirées. Collection remise à 0 / ${allCards.length}.`, "#ff5252");
             }
         }
@@ -2033,6 +2131,15 @@
             if (!cardName) return;
 
             userCollection[cardName] = (userCollection[cardName] || 0) + 1;
+            const cardObj = getCardByName(cardName);
+            if (cardObj) {
+                const stats = getGameStats();
+                if (cardObj.rarity === 'Commune') stats.pulledCommons++;
+                else if (cardObj.rarity === 'Assez-Rare') stats.pulledAR++;
+                else if (cardObj.rarity === 'Epique') stats.pulledEpics++;
+                else if (cardObj.rarity === 'Légendaire') stats.pulledLegendaries++;
+                saveGameStats(stats);
+            }
             saveCollection();
             showAdminFeedback(`➕ Carte "${cardName}" ajoutée (+1) ! Total possédé : x${userCollection[cardName]}`, "#00b0ff");
         }
@@ -2169,6 +2276,84 @@
         function closeModal(event) {
             if (!event || event.target.id === 'card-modal' || event.target.classList.contains('close-btn')) {
                 document.getElementById("card-modal").style.display = "none";
+            }
+        }
+
+        function openStatsModal() {
+            const stats = getGameStats();
+            const modal = document.getElementById("stats-modal");
+            const container = document.getElementById("stats-grid-container");
+            if (!modal || !container) return;
+
+            const totalPulled = (stats.pulledCommons || 0) + (stats.pulledAR || 0) + (stats.pulledEpics || 0) + (stats.pulledLegendaries || 0);
+            const getPct = (val) => totalPulled > 0 ? ((val / totalPulled) * 100).toFixed(1) + "%" : "0.0%";
+
+            const uniqueOwned = Object.keys(userCollection).filter(k => (userCollection[k] || 0) > 0).length;
+            const totalCollection = allCards.length;
+            const completionPct = ((uniqueOwned / totalCollection) * 100).toFixed(1);
+
+            container.innerHTML = `
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px;">
+                    <div style="background: #0f172a; border: 2px solid #00f0ff; padding: 12px; box-shadow: 4px 4px 0px #000; color: #fff;">
+                        <div style="font-size: 0.85rem; color: #00f0ff; letter-spacing: 1px;">PACKS OUVERTS</div>
+                        <div style="font-family: 'Bangers', cursive; font-size: 2.6rem; color: #ffd54f; line-height: 1.1; margin-top: 4px;">${stats.packsOpened}</div>
+                    </div>
+                    <div style="background: #0f172a; border: 2px solid #00f0ff; padding: 12px; box-shadow: 4px 4px 0px #000; color: #fff;">
+                        <div style="font-size: 0.85rem; color: #00f0ff; letter-spacing: 1px;">CARTES OBTENUES</div>
+                        <div style="font-family: 'Bangers', cursive; font-size: 2.6rem; color: #fff; line-height: 1.1; margin-top: 4px;">${totalPulled}</div>
+                        <div style="font-size: 0.75rem; color: #aaa;">(Doublons inclus)</div>
+                    </div>
+                </div>
+
+                <div style="background: #151d2a; border: 2px solid #334155; padding: 12px; margin-bottom: 12px; box-shadow: 4px 4px 0px #000; color: #fff; text-align: left;">
+                    <div style="font-size: 0.9rem; font-weight: bold; margin-bottom: 10px; color: #00f0ff; text-align: center; letter-spacing: 1px;">
+                        RÉPARTITION PAR RARETÉ (AVEC DOUBLONS)
+                    </div>
+                    
+                    <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; margin-bottom: 8px; background: rgba(255, 213, 79, 0.12); border-left: 6px solid #ffd54f;">
+                        <div>
+                            <strong style="color: #ffd54f; font-size: 1.05rem;">⭐ LÉGENDAIRES</strong>
+                            <span style="font-size: 0.8rem; color: #bbb; margin-left: 8px;">(${getPct(stats.pulledLegendaries || 0)})</span>
+                        </div>
+                        <div style="font-family: 'Bangers', cursive; font-size: 1.7rem; color: #ffd54f;">${stats.pulledLegendaries || 0}</div>
+                    </div>
+
+                    <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; margin-bottom: 8px; background: rgba(176, 0, 255, 0.12); border-left: 6px solid #b000ff;">
+                        <div>
+                            <strong style="color: #b000ff; font-size: 1.05rem;">💎 ÉPIQUES</strong>
+                            <span style="font-size: 0.8rem; color: #bbb; margin-left: 8px;">(${getPct(stats.pulledEpics || 0)})</span>
+                        </div>
+                        <div style="font-family: 'Bangers', cursive; font-size: 1.7rem; color: #ea80fc;">${stats.pulledEpics || 0}</div>
+                    </div>
+
+                    <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; margin-bottom: 8px; background: rgba(0, 176, 255, 0.12); border-left: 6px solid #00b0ff;">
+                        <div>
+                            <strong style="color: #00b0ff; font-size: 1.05rem;">🔷 ASSEZ RARES (AR)</strong>
+                            <span style="font-size: 0.8rem; color: #bbb; margin-left: 8px;">(${getPct(stats.pulledAR || 0)})</span>
+                        </div>
+                        <div style="font-family: 'Bangers', cursive; font-size: 1.7rem; color: #80d8ff;">${stats.pulledAR || 0}</div>
+                    </div>
+
+                    <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; background: rgba(158, 158, 158, 0.12); border-left: 6px solid #9e9e9e;">
+                        <div>
+                            <strong style="color: #ccc; font-size: 1.05rem;">⚪ COMMUNES</strong>
+                            <span style="font-size: 0.8rem; color: #bbb; margin-left: 8px;">(${getPct(stats.pulledCommons || 0)})</span>
+                        </div>
+                        <div style="font-family: 'Bangers', cursive; font-size: 1.7rem; color: #fff;">${stats.pulledCommons || 0}</div>
+                    </div>
+                </div>
+
+                <div style="background: rgba(0, 240, 255, 0.08); border: 2px dashed #00f0ff; padding: 10px; font-size: 0.95rem; color: #111; font-weight: bold;">
+                    🏆 Complétion Collection : <span style="color: #0288d1;">${uniqueOwned} / ${totalCollection}</span> fiches (${completionPct}%)
+                </div>
+            `;
+
+            modal.style.display = "flex";
+        }
+
+        function closeStatsModal(event) {
+            if (!event || event.target.id === 'stats-modal' || event.target.classList.contains('close-btn')) {
+                document.getElementById("stats-modal").style.display = "none";
             }
         }
 
